@@ -18,3 +18,28 @@ TF_ACC=1
 OVH_CONSUMER_KEY=...
 go test -v
 ```
+
+* Example with working resources
+
+```terraform
+resource "ovh_vrack_publiccloud_attachment" "attach" {
+  vrack_id   = "${var.vrack_id}"
+	project_id = "${var.project_id}"
+}
+resource "ovh_publiccloud_private_network" "network" {
+	project_id  = "${ovh_vrack_publiccloud_attachment.attach.project_id}"
+  vlan_id     = 0
+  name        = "terraform_testacc_private_net"
+  regions     = ["GRA1", "BHS1"]
+}
+resource "ovh_publiccloud_private_network_subnet" "subnet" {
+	project_id = "${ovh_publiccloud_private_network.network.project_id}"
+  network_id = "${ovh_publiccloud_private_network.network.id}"
+  region     = "GRA1"
+  start      = "192.168.168.100"
+  end        = "192.168.168.200"
+  network    = "192.168.168.0/24"
+  dhcp       = true
+  no_gateway = false
+}
+```
