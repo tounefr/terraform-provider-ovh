@@ -37,6 +37,15 @@ func resourcePublicCloudPrivateNetwork() *schema.Resource {
 				Type:     schema.TypeSet,
 				Optional: true,
 				Computed: true,
+				ForceNew: true,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+				Set:      schema.HashString,
+			},
+
+			"regions_status": &schema.Schema{
+				Type:     schema.TypeSet,
+				Optional: true,
+				Computed: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"status": &schema.Schema{
@@ -93,12 +102,12 @@ func (p *pcpnRegion) String() string {
 }
 
 type pcpnResponse struct {
-	Id      string       `json:"id"`
-	Status  string       `json:"status"`
-	Vlanid  int          `json:"vlanId"`
-	Name    string       `json:"name"`
-	Type    string       `json:"type"`
-	Regions []pcpnRegion `json:"regions"`
+	Id      string        `json:"id"`
+	Status  string        `json:"status"`
+	Vlanid  int           `json:"vlanId"`
+	Name    string        `json:"name"`
+	Type    string        `json:"type"`
+	Regions []*pcpnRegion `json:"regions"`
 }
 
 func (p *pcpnResponse) String() string {
@@ -107,10 +116,12 @@ func (p *pcpnResponse) String() string {
 
 func regionsParamsFromSchema(d *schema.ResourceData) []string {
 	var regions []string
-	if rs := d.Get("regions").(*schema.Set); rs.Len() > 0 {
-		for _, v := range rs.List() {
-			r := v.(map[string]interface{})
-			regions = append(regions, r["region"].(string))
+	if v := d.Get("regions"); v != nil {
+		rs := v.(*schema.Set).List()
+		if len(rs) > 0 {
+			for _, v := range v.(*schema.Set).List() {
+				regions = append(regions, v.(string))
+			}
 		}
 	}
 	return regions
@@ -135,7 +146,7 @@ func resourcePublicCloudPrivateNetworkCreate(d *schema.ResourceData, meta interf
 
 	err := config.OVHClient.Post(endpoint, params, r)
 	if err != nil {
-		return fmt.Errorf("Error calling %s with params %s:\n\t %q", endpoint, params, err)
+		return fmt.Errorf("[ERROR] calling %s with params %s:\n\t %q", endpoint, params, err)
 	}
 
 	log.Printf("[DEBUG] Waiting for Private Network %s:", r)
@@ -151,7 +162,7 @@ func resourcePublicCloudPrivateNetworkCreate(d *schema.ResourceData, meta interf
 
 	_, err = stateConf.WaitForState()
 	if err != nil {
-		return fmt.Errorf("Error waiting for private network (%s): %s", params, err)
+		return fmt.Errorf("[ERROR] waiting for private network (%s): %s", params, err)
 	}
 	log.Printf("[DEBUG] Created Private Network %s", r)
 
@@ -175,7 +186,7 @@ func resourcePublicCloudPrivateNetworkUpdate(d *schema.ResourceData, meta interf
 
 	err := config.OVHClient.Put(endpoint, params, nil)
 	if err != nil {
-		return fmt.Errorf("Error calling %s with params %s:\n\t %q", endpoint, params, err)
+		return fmt.Errorf("[ERROR] calling %s with params %s:\n\t %q", endpoint, params, err)
 	}
 
 	log.Printf("[DEBUG] Updated Public cloud %s Private Network %s:", projectId, d.Id())
@@ -196,7 +207,7 @@ func resourcePublicCloudPrivateNetworkRead(d *schema.ResourceData, meta interfac
 
 	err := config.OVHClient.Get(endpoint, r)
 	if err != nil {
-		return fmt.Errorf("Error calling %s:\n\t %q", endpoint, err)
+		return fmt.Errorf("[ERROR] calling %s:\n\t %q", endpoint, err)
 	}
 
 	readPcpn(d, r)
@@ -218,7 +229,7 @@ func readPcpn(d *schema.ResourceData, r *pcpnResponse) {
 		region["status"] = r.Regions[i].Status
 		regions = append(regions, region)
 	}
-	d.Set("regions", regions)
+	d.Set("regions_status", regions)
 
 	d.SetId(r.Id)
 }
@@ -235,7 +246,7 @@ func resourcePublicCloudPrivateNetworkDelete(d *schema.ResourceData, meta interf
 
 	err := config.OVHClient.Delete(endpoint, nil)
 	if err != nil {
-		return fmt.Errorf("Error calling %s:\n\t %q", endpoint, err)
+		return fmt.Errorf("[ERROR] calling %s:\n\t %q", endpoint, err)
 	}
 
 	stateConf := &resource.StateChangeConf{
@@ -249,7 +260,7 @@ func resourcePublicCloudPrivateNetworkDelete(d *schema.ResourceData, meta interf
 
 	_, err = stateConf.WaitForState()
 	if err != nil {
-		return fmt.Errorf("Error deleting for private network (%s): %s", id, err)
+		return fmt.Errorf("[ERROR] deleting for private network (%s): %s", id, err)
 	}
 
 	d.SetId("")
@@ -267,7 +278,7 @@ func pcpnExists(projectId, id string, c *ovh.Client) error {
 
 	err := c.Get(endpoint, r)
 	if err != nil {
-		return fmt.Errorf("Error calling %s:\n\t %q", endpoint, err)
+		return fmt.Errorf("[ERROR] calling %s:\n\t %q", endpoint, err)
 	}
 	log.Printf("[DEBUG] Read public cloud private network: %s", r)
 
