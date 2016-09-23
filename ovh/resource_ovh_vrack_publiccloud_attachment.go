@@ -31,17 +31,17 @@ func resourceVRackPublicCloudAttachment() *schema.Resource {
 }
 
 // Params
-type attachParams struct {
+type vrackPublicCloudAttachParams struct {
 	Project string `json:"project"`
 }
 
 // Task Params
-type taskParams struct {
+type vrackTaskParams struct {
 	ServiceName string `json:"serviceName"`
 	TaskId      string `json:"taskId"`
 }
 
-type attachTaskResponse struct {
+type vrackPublicCloudAttachTaskResponse struct {
 	Id           int       `json:"id"`
 	Function     string    `json:"function"`
 	TargetDomain string    `json:"targetDomain"`
@@ -56,8 +56,8 @@ func resourceVRackPublicCloudAttachmentCreate(d *schema.ResourceData, meta inter
 	config := meta.(*Config)
 
 	vrackId := d.Get("vrack_id").(string)
-	params := &attachParams{Project: d.Get("project_id").(string)}
-	r := attachTaskResponse{}
+	params := &vrackPublicCloudAttachParams{Project: d.Get("project_id").(string)}
+	r := vrackPublicCloudAttachTaskResponse{}
 
 	log.Printf("[DEBUG] Will Attach VRack %s -> PublicCloud %s", vrackId, params.Project)
 
@@ -94,8 +94,8 @@ func resourceVRackPublicCloudAttachmentRead(d *schema.ResourceData, meta interfa
 	config := meta.(*Config)
 
 	vrackId := d.Get("vrack_id").(string)
-	params := &attachParams{Project: d.Get("project_id").(string)}
-	r := attachTaskResponse{}
+	params := &vrackPublicCloudAttachParams{Project: d.Get("project_id").(string)}
+	r := vrackPublicCloudAttachTaskResponse{}
 	endpoint := fmt.Sprintf("/vrack/%s/cloudProject/%s", vrackId, params.Project)
 
 	err := config.OVHClient.Get(endpoint, &r)
@@ -111,9 +111,9 @@ func resourceVRackPublicCloudAttachmentDelete(d *schema.ResourceData, meta inter
 	config := meta.(*Config)
 
 	vrackId := d.Get("vrack_id").(string)
-	params := &attachParams{Project: d.Get("project_id").(string)}
+	params := &vrackPublicCloudAttachParams{Project: d.Get("project_id").(string)}
 
-	r := attachTaskResponse{}
+	r := vrackPublicCloudAttachTaskResponse{}
 	endpoint := fmt.Sprintf("/vrack/%s/cloudProject/%s", vrackId, params.Project)
 
 	err := config.OVHClient.Delete(endpoint, &r)
@@ -165,7 +165,7 @@ func vrackPublicCloudAttachmentExists(vrackId, projectId string, c *ovh.Client) 
 // an Attachment Task.
 func VRackTaskRefreshFunc(c *ovh.Client, serviceName string, taskId int) resource.StateRefreshFunc {
 	return func() (interface{}, string, error) {
-		r := attachTaskResponse{}
+		r := vrackPublicCloudAttachTaskResponse{}
 		endpoint := fmt.Sprintf("/vrack/%s/task/%d", serviceName, taskId)
 		err := c.Get(endpoint, &r)
 		if err != nil {

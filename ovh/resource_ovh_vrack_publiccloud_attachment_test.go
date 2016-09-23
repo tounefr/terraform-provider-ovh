@@ -9,7 +9,7 @@ import (
 )
 
 var testAccVRackPublicCloudAttachmentConfig = fmt.Sprintf(`
-resource "ovh_vrack_public_cloud_attachment" "attach" {
+resource "ovh_vrack_publiccloud_attachment" "attach" {
   vrack_id = "%s"
 	project_id = "%s"
 }
@@ -24,7 +24,7 @@ func TestAccVRackPublicCloudAttachment_basic(t *testing.T) {
 			resource.TestStep{
 				Config: testAccVRackPublicCloudAttachmentConfig,
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckVRackPublicCloudAttachmentExists("ovh_vrack_public_cloud_attachment.attach", t),
+					testAccCheckVRackPublicCloudAttachmentExists("ovh_vrack_publiccloud_attachment.attach", t),
 				),
 			},
 		},
@@ -35,43 +35,6 @@ func testAccCheckVRackPublicCloudAttachmentPreCheck(t *testing.T) {
 	testAccPreCheck(t)
 	testAccCheckVRackExists(t)
 	testAccCheckPublicCloudExists(t)
-}
-
-func testAccCheckVRackExists(t *testing.T) {
-	type vrackResponse struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
-
-	r := vrackResponse{}
-
-	endpoint := fmt.Sprintf("/vrack/%s", os.Getenv("OVH_VRACK"))
-
-	err := testAccOVHClient.Get(endpoint, &r)
-	if err != nil {
-		t.Fatalf("Error: %q\n", err)
-	}
-	t.Logf("Read VRack %s -> name:'%s', desc:'%s' ", endpoint, r.Name, r.Description)
-
-}
-
-func testAccCheckPublicCloudExists(t *testing.T) {
-	type cloudProjectResponse struct {
-		ID          string `json:"project_id"`
-		Status      string `json:"status"`
-		Description string `json:"description"`
-	}
-
-	r := cloudProjectResponse{}
-
-	endpoint := fmt.Sprintf("/cloud/project/%s", os.Getenv("OVH_PUBLIC_CLOUD"))
-
-	err := testAccOVHClient.Get(endpoint, &r)
-	if err != nil {
-		t.Fatalf("Error: %q\n", err)
-	}
-	t.Logf("Read Cloud Project %s -> status: '%s', desc: '%s'", endpoint, r.Status, r.Description)
-
 }
 
 func testAccCheckVRackPublicCloudAttachmentExists(n string, t *testing.T) resource.TestCheckFunc {
@@ -98,7 +61,7 @@ func testAccCheckVRackPublicCloudAttachmentExists(n string, t *testing.T) resour
 func testAccCheckVRackPublicCloudAttachmentDestroy(s *terraform.State) error {
 	config := testAccProvider.Meta().(*Config)
 	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "ovh_vrack_public_cloud_attachment" {
+		if rs.Type != "ovh_vrack_publiccloud_attachment" {
 			continue
 		}
 

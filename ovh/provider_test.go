@@ -1,6 +1,7 @@
 package ovh
 
 import (
+	"fmt"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/terraform"
 	"github.com/ovh/go-ovh/ovh"
@@ -76,4 +77,41 @@ func testAccPreCheck(t *testing.T) {
 			testAccOVHClient = config.OVHClient
 		}
 	}
+}
+
+func testAccCheckVRackExists(t *testing.T) {
+	type vrackResponse struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+
+	r := vrackResponse{}
+
+	endpoint := fmt.Sprintf("/vrack/%s", os.Getenv("OVH_VRACK"))
+
+	err := testAccOVHClient.Get(endpoint, &r)
+	if err != nil {
+		t.Fatalf("Error: %q\n", err)
+	}
+	t.Logf("Read VRack %s -> name:'%s', desc:'%s' ", endpoint, r.Name, r.Description)
+
+}
+
+func testAccCheckPublicCloudExists(t *testing.T) {
+	type cloudProjectResponse struct {
+		ID          string `json:"project_id"`
+		Status      string `json:"status"`
+		Description string `json:"description"`
+	}
+
+	r := cloudProjectResponse{}
+
+	endpoint := fmt.Sprintf("/cloud/project/%s", os.Getenv("OVH_PUBLIC_CLOUD"))
+
+	err := testAccOVHClient.Get(endpoint, &r)
+	if err != nil {
+		t.Fatalf("Error: %q\n", err)
+	}
+	t.Logf("Read Cloud Project %s -> status: '%s', desc: '%s'", endpoint, r.Status, r.Description)
+
 }
