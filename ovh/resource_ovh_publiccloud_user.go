@@ -21,6 +21,7 @@ func resourcePublicCloudUser() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				d.Set("project_id", os.Getenv("OVH_PROJECT_ID"))
+				resourcePublicCloudUserRegeneratePassword(d, meta)
 				return []*schema.ResourceData{d}, nil
 			},
 		},
@@ -130,8 +131,7 @@ func resourcePublicCloudUserCreate(d *schema.ResourceData, meta interface{}) err
 	}
 	log.Printf("[DEBUG] Created User %s", r)
 
-	//set id
-	d.SetId(strconv.Itoa(r.Id))
+	readPcu(d, r, true)
 
 	openstackrc := make(map[string]string)
 	err = pcuGetOpenstackRC(projectId, d.Id(), config.OVHClient, openstackrc)
@@ -193,6 +193,37 @@ func resourcePublicCloudUserRead(d *schema.ResourceData, meta interface{}) error
 
 	projectId := d.Get("project_id").(string)
 
+	d.Partial(true)
+	r := &pcuResponse{}
+
+	log.Printf("[DEBUG] Will read public cloud user %s from project: %s", d.Id(), projectId)
+
+	endpoint := fmt.Sprintf("/cloud/project/%s/user/%s", projectId, d.Id())
+
+	err := config.OVHClient.Get(endpoint, r)
+	if err != nil {
+		return fmt.Errorf("[ERROR] calling Get %s:\n\t %q", endpoint, err)
+	}
+
+	readPcu(d, r, false)
+
+	openstackrc := make(map[string]string)
+	err = pcuGetOpenstackRC(projectId, d.Id(), config.OVHClient, openstackrc)
+	if err != nil {
+		return fmt.Errorf("[ERROR] Reading openstack creds for user %s: %s", d.Id(), err)
+	}
+
+	d.Set("openstack_rc", &openstackrc)
+	d.Partial(false)
+	log.Printf("[DEBUG] Read Public Cloud User %s", r)
+	return nil
+}
+
+func resourcePublicCloudUserRegeneratePassword(d *schema.ResourceData, meta interface{}) error {
+	config := meta.(*Config)
+
+	projectId := d.Get("project_id").(string)
+
 	r := &pcuResponse{}
 
 	// Every time you read the user, we must regenerate a password
@@ -226,7 +257,7 @@ func resourcePublicCloudUserRead(d *schema.ResourceData, meta interface{}) error
 	}
 	log.Printf("[DEBUG] Read User with new password %s", r)
 
-	readPcu(d, r)
+	readPcu(d, r, true)
 
 	openstackrc := make(map[string]string)
 	err = pcuGetOpenstackRC(projectId, d.Id(), config.OVHClient, openstackrc)
@@ -240,12 +271,14 @@ func resourcePublicCloudUserRead(d *schema.ResourceData, meta interface{}) error
 	return nil
 }
 
-func readPcu(d *schema.ResourceData, r *pcuResponse) {
+func readPcu(d *schema.ResourceData, r *pcuResponse, setPassword bool) {
 	d.Set("description", r.Description)
 	d.Set("status", r.Status)
 	d.Set("creation_date", r.CreationDate)
 	d.Set("username", r.Username)
-	d.Set("password", r.Password)
+	if setPassword {
+		d.Set("password", r.Password)
+	}
 	d.SetId(strconv.Itoa(r.Id))
 }
 
