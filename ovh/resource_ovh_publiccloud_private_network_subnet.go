@@ -5,6 +5,7 @@ import (
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/ovh/go-ovh/ovh"
 	"log"
+	"os"
 )
 
 func resourcePublicCloudPrivateNetworkSubnet() *schema.Resource {
@@ -12,12 +13,20 @@ func resourcePublicCloudPrivateNetworkSubnet() *schema.Resource {
 		Create: resourcePublicCloudPrivateNetworkSubnetCreate,
 		Read:   resourcePublicCloudPrivateNetworkSubnetRead,
 		Delete: resourcePublicCloudPrivateNetworkSubnetDelete,
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				d.Set("project_id", os.Getenv("OVH_PROJECT_ID"))
+				d.Set("network_id", os.Getenv("OVH_NETWORK_ID"))
+				return []*schema.ResourceData{d}, nil
+			},
+		},
 
 		Schema: map[string]*schema.Schema{
 			"project_id": &schema.Schema{
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OVH_PROJECT_ID", ""),
 			},
 			"network_id": &schema.Schema{
 				Type:     schema.TypeString,
@@ -239,7 +248,19 @@ func readPcpns(d *schema.ResourceData, rs []*pcpnsResponse) error {
 		ippool["end"] = r.IPPools[i].End
 		ippools = append(ippools, ippool)
 	}
+
+	d.Set("network", ippools[0]["network"])
+	d.Set("region", ippools[0]["region"])
+	d.Set("dhcp", ippools[0]["dhcp"])
+	d.Set("start", ippools[0]["start"])
+	d.Set("end", ippools[0]["end"])
 	d.Set("ip_pools", ippools)
+
+	if r.GatewayIp == "" {
+		d.Set("no_gateway", true)
+	} else {
+		d.Set("no_gateway", false)
+	}
 
 	d.SetId(r.Id)
 	return nil

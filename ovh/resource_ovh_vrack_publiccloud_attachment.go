@@ -6,25 +6,43 @@ import (
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/ovh/go-ovh/ovh"
 	"log"
+	"regexp"
 	"time"
 )
+
+var vpcaID = regexp.MustCompile("vrack_(.+)-cloudproject_(.+)-attach")
 
 func resourceVRackPublicCloudAttachment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceVRackPublicCloudAttachmentCreate,
 		Read:   resourceVRackPublicCloudAttachmentRead,
 		Delete: resourceVRackPublicCloudAttachmentDelete,
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				params := vpcaID.FindStringSubmatch(d.Id())
+				if params == nil {
+					return nil, fmt.Errorf("[ERROR] couln't extract vrack id nor project id from id %q", d.Id())
+				}
+
+				d.Set("vrack_id", params[1])
+				d.Set("project_id", params[2])
+
+				return []*schema.ResourceData{d}, nil
+			},
+		},
 
 		Schema: map[string]*schema.Schema{
 			"vrack_id": &schema.Schema{
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OVH_VRACK_ID", ""),
 			},
 			"project_id": &schema.Schema{
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OVH_PROJECT_ID", ""),
 			},
 		},
 	}

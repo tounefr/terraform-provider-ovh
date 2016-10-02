@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/ovh/go-ovh/ovh"
 	"log"
+	"os"
 	"time"
 )
 
@@ -15,12 +16,19 @@ func resourcePublicCloudPrivateNetwork() *schema.Resource {
 		Read:   resourcePublicCloudPrivateNetworkRead,
 		Update: resourcePublicCloudPrivateNetworkUpdate,
 		Delete: resourcePublicCloudPrivateNetworkDelete,
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				d.Set("project_id", os.Getenv("OVH_PROJECT_ID"))
+				return []*schema.ResourceData{d}, nil
+			},
+		},
 
 		Schema: map[string]*schema.Schema{
 			"project_id": &schema.Schema{
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OVH_PROJECT_ID", ""),
 			},
 			"name": &schema.Schema{
 				Type:     schema.TypeString,
@@ -222,14 +230,17 @@ func readPcpn(d *schema.ResourceData, r *pcpnResponse) {
 	d.Set("type", r.Type)
 	d.Set("vlan_id", r.Vlanid)
 
-	regions := make([]map[string]interface{}, 0)
+	regions_status := make([]map[string]interface{}, 0)
+	regions := make([]string, 0)
 	for i := range r.Regions {
 		region := make(map[string]interface{})
 		region["region"] = r.Regions[i].Region
 		region["status"] = r.Regions[i].Status
-		regions = append(regions, region)
+		regions_status = append(regions_status, region)
+		regions = append(regions, fmt.Sprintf(r.Regions[i].Region))
 	}
-	d.Set("regions_status", regions)
+	d.Set("regions_status", regions_status)
+	d.Set("regions", regions)
 
 	d.SetId(r.Id)
 }

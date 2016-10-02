@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/ovh/go-ovh/ovh"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -17,11 +18,19 @@ func resourcePublicCloudUser() *schema.Resource {
 		Read:   resourcePublicCloudUserRead,
 		Delete: resourcePublicCloudUserDelete,
 
+		Importer: &schema.ResourceImporter{
+			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+				d.Set("project_id", os.Getenv("OVH_PROJECT_ID"))
+				return []*schema.ResourceData{d}, nil
+			},
+		},
+
 		Schema: map[string]*schema.Schema{
 			"project_id": &schema.Schema{
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Required:    true,
+				ForceNew:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OVH_PROJECT_ID", ""),
 			},
 			"description": &schema.Schema{
 				Type:     schema.TypeString,
@@ -33,8 +42,9 @@ func resourcePublicCloudUser() *schema.Resource {
 				Computed: true,
 			},
 			"password": &schema.Schema{
-				Type:     schema.TypeString,
-				Computed: true,
+				Type:      schema.TypeString,
+				Computed:  true,
+				Sensitive: true,
 			},
 			"status": &schema.Schema{
 				Type:     schema.TypeString,
@@ -185,18 +195,48 @@ func resourcePublicCloudUserRead(d *schema.ResourceData, meta interface{}) error
 
 	r := &pcuResponse{}
 
-	log.Printf("[DEBUG] Will read public cloud user for project: %s, id: %s", projectId, d.Id())
+	// Every time you read the user, we must regenerate a password
+	// to be able to set it as an attribute because the password
+	// is not returned by the GET method
+	// thus, update the user
+	log.Printf("[DEBUG] Will read & regenerate password for public cloud user %s from project: %s", d.Id(), projectId)
 
-	endpoint := fmt.Sprintf("/cloud/project/%s/user/%s", projectId, d.Id())
+	d.Partial(true)
+	endpoint := fmt.Sprintf("/cloud/project/%s/user/%s/regeneratePassword", projectId, d.Id())
 
-	err := config.OVHClient.Get(endpoint, r)
+	err := config.OVHClient.Post(endpoint, nil, r)
 	if err != nil {
-		return fmt.Errorf("[ERROR] calling Get %s:\n\t %q", endpoint, err)
+		return fmt.Errorf("[ERROR] calling Post %s:\n\t %q", endpoint, err)
 	}
+
+	log.Printf("[DEBUG] Waiting for User %s:", r)
+
+	stateConf := &resource.StateChangeConf{
+		Pending:    []string{"updating"},
+		Target:     []string{"ok"},
+		Refresh:    pcuRefreshFunc(config.OVHClient, projectId, strconv.Itoa(r.Id)),
+		Timeout:    10 * time.Minute,
+		Delay:      10 * time.Second,
+		MinTimeout: 3 * time.Second,
+	}
+
+	_, err = stateConf.WaitForState()
+	if err != nil {
+		return fmt.Errorf("[ERROR] waiting for user (%s): %s", d.Id(), err)
+	}
+	log.Printf("[DEBUG] Read User with new password %s", r)
 
 	readPcu(d, r)
 
-	log.Printf("[DEBUG] Read Public Cloud Private Network %s", r)
+	openstackrc := make(map[string]string)
+	err = pcuGetOpenstackRC(projectId, d.Id(), config.OVHClient, openstackrc)
+	if err != nil {
+		return fmt.Errorf("[ERROR] Reading openstack creds for user %s: %s", d.Id(), err)
+	}
+
+	d.Set("openstack_rc", &openstackrc)
+	d.Partial(false)
+	log.Printf("[DEBUG] Read Public Cloud User %s", r)
 	return nil
 }
 
