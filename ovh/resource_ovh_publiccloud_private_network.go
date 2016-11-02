@@ -5,6 +5,7 @@ import (
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/ovh/go-ovh/ovh"
+	"github.com/rackspace/gophercloud/openstack/networking/v2/networks"
 	"log"
 	"os"
 	"time"
@@ -50,23 +51,24 @@ func resourcePublicCloudPrivateNetwork() *schema.Resource {
 				Set:      schema.HashString,
 			},
 
+			"os_net_ids": &schema.Schema{
+				Type:     schema.TypeMap,
+				Computed: true,
+			},
+
 			"regions_status": &schema.Schema{
 				Type:     schema.TypeSet,
-				Optional: true,
 				Computed: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"status": &schema.Schema{
 							Type:     schema.TypeString,
 							Required: true,
-							ForceNew: true,
 						},
 
 						"region": &schema.Schema{
 							Type:     schema.TypeString,
-							Optional: true,
 							Computed: true,
-							ForceNew: true,
 						},
 					},
 				},
@@ -199,7 +201,7 @@ func resourcePublicCloudPrivateNetworkUpdate(d *schema.ResourceData, meta interf
 
 	log.Printf("[DEBUG] Updated Public cloud %s Private Network %s:", projectId, d.Id())
 
-	return nil
+	return resourcePublicCloudPrivateNetworkRead(d, meta)
 }
 
 func resourcePublicCloudPrivateNetworkRead(d *schema.ResourceData, meta interface{}) error {
@@ -213,18 +215,23 @@ func resourcePublicCloudPrivateNetworkRead(d *schema.ResourceData, meta interfac
 
 	endpoint := fmt.Sprintf("/cloud/project/%s/network/private/%s", projectId, d.Id())
 
+	d.Partial(true)
 	err := config.OVHClient.Get(endpoint, r)
 	if err != nil {
-		return fmt.Errorf("[ERROR] calling %s:\n\t %q", endpoint, err)
+		return fmt.Errorf("Error calling %s:\n\t %q", endpoint, err)
 	}
 
-	readPcpn(d, r)
+	err = readPcpn(config, d, r)
+	if err != nil {
+		return err
+	}
+	d.Partial(false)
 
 	log.Printf("[DEBUG] Read Public Cloud Private Network %s", r)
 	return nil
 }
 
-func readPcpn(d *schema.ResourceData, r *pcpnResponse) {
+func readPcpn(config *Config, d *schema.ResourceData, r *pcpnResponse) error {
 	d.Set("name", r.Name)
 	d.Set("status", r.Status)
 	d.Set("type", r.Type)
@@ -232,17 +239,31 @@ func readPcpn(d *schema.ResourceData, r *pcpnResponse) {
 
 	regions_status := make([]map[string]interface{}, 0)
 	regions := make([]string, 0)
+	netIds := make(map[string]string)
 	for i := range r.Regions {
 		region := make(map[string]interface{})
 		region["region"] = r.Regions[i].Region
 		region["status"] = r.Regions[i].Status
 		regions_status = append(regions_status, region)
 		regions = append(regions, fmt.Sprintf(r.Regions[i].Region))
+
+		netClient, err := config.networkingV2Client(region["region"].(string))
+		if err != nil {
+			return fmt.Errorf("Error getting Openstack networking client: %s", err)
+		}
+
+		osId, err := networks.IDFromName(netClient, r.Name)
+		if err != nil {
+			return fmt.Errorf("Error reading net id from Openstack: %s", err)
+		}
+		netIds[region["region"].(string)] = osId
 	}
 	d.Set("regions_status", regions_status)
 	d.Set("regions", regions)
+	d.Set("os_net_ids", netIds)
 
 	d.SetId(r.Id)
+	return nil
 }
 
 func resourcePublicCloudPrivateNetworkDelete(d *schema.ResourceData, meta interface{}) error {
