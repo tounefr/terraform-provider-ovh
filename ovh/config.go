@@ -84,35 +84,36 @@ func (c *Config) loadAndValidate() error {
 	log.Printf("[DEBUG] Logged in on OVH API as %s!", me.Firstname)
 	c.OVHClient = targetClient
 
-	log.Printf("[DEBUG] Configuring openstack client!")
+	c.OSClient = nil
+	if c.OSIdentityEndpoint != "" {
+		log.Printf("[DEBUG] Configuring openstack client!")
 
-	if c.OSEndpointType != "internal" && c.OSEndpointType != "internalURL" &&
-		c.OSEndpointType != "admin" && c.OSEndpointType != "adminURL" &&
-		c.OSEndpointType != "public" && c.OSEndpointType != "publicURL" &&
-		c.OSEndpointType != "" {
-		return fmt.Errorf("Invalid openstack endpoint type provided")
+		if c.OSEndpointType != "internal" && c.OSEndpointType != "internalURL" &&
+			c.OSEndpointType != "admin" && c.OSEndpointType != "adminURL" &&
+			c.OSEndpointType != "public" && c.OSEndpointType != "publicURL" &&
+			c.OSEndpointType != "" {
+			return fmt.Errorf("Invalid openstack endpoint type provided")
+		}
+
+		ao := gophercloud.AuthOptions{
+			Username:         c.OSUsername,
+			Password:         c.OSPassword,
+			IdentityEndpoint: c.OSIdentityEndpoint,
+			TenantName:       c.OSTenantName,
+		}
+
+		client, err := openstack.NewClient(ao.IdentityEndpoint)
+		if err != nil {
+			return err
+		}
+
+		log.Printf("[DEBUG] Authenticate openstack client with options: %v", ao)
+		err = openstack.Authenticate(client, ao)
+		if err != nil {
+			return err
+		}
+		c.OSClient = client
 	}
-
-	ao := gophercloud.AuthOptions{
-		Username:         c.OSUsername,
-		Password:         c.OSPassword,
-		IdentityEndpoint: c.OSIdentityEndpoint,
-		TenantName:       c.OSTenantName,
-	}
-
-	client, err := openstack.NewClient(ao.IdentityEndpoint)
-	if err != nil {
-		return err
-	}
-
-	log.Printf("[DEBUG] Authenticate openstack client with options: %v", ao)
-	err = openstack.Authenticate(client, ao)
-	if err != nil {
-		return err
-	}
-
-	c.OSClient = client
-
 	return nil
 }
 

@@ -31,7 +31,7 @@ func Provider() terraform.ResourceProvider {
 			},
 			"os_auth_url": &schema.Schema{
 				Type:        schema.TypeString,
-				Required:    true,
+				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OS_AUTH_URL", nil),
 			},
 			"os_user_name": &schema.Schema{
@@ -61,6 +61,7 @@ func Provider() terraform.ResourceProvider {
 			"ovh_publiccloud_private_network":        resourcePublicCloudPrivateNetwork(),
 			"ovh_publiccloud_private_network_subnet": resourcePublicCloudPrivateNetworkSubnet(),
 			"ovh_publiccloud_user":                   resourcePublicCloudUser(),
+			"ovh_domain_record":			  resourceDomainRecord(),
 		},
 
 		ConfigureFunc: configureProvider,
